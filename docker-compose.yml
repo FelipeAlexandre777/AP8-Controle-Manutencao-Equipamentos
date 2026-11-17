@@ -1,0 +1,48 @@
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes: ["./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro"]
+  controller1: &controller
+    build: .
+    command: uvicorn app.controller:app --host 0.0.0.0 --port 8100
+    environment: {NODE_ID: controller1, DATA_DIR: /data, NODE_SECRET: "controller1-secret-change-me"}
+    volumes: ["controller1_data:/data"]
+  controller2:
+    <<: *controller
+    environment: {NODE_ID: controller2, DATA_DIR: /data, NODE_SECRET: "controller2-secret-change-me"}
+    volumes: ["controller2_data:/data"]
+  controller3:
+    <<: *controller
+    environment: {NODE_ID: controller3, DATA_DIR: /data, NODE_SECRET: "controller3-secret-change-me"}
+    volumes: ["controller3_data:/data"]
+  controller4:
+    <<: *controller
+    environment: {NODE_ID: controller4, DATA_DIR: /data, NODE_SECRET: "controller4-secret-change-me"}
+    volumes: ["controller4_data:/data"]
+  middleware:
+    build: .
+    command: uvicorn app.middleware:app --host 0.0.0.0 --port 8000
+    ports: ["8000:8000"]
+    environment:
+      MQTT_HOST: mqtt
+      CONTROLLERS: http://controller1:8100,http://controller2:8100,http://controller3:8100,http://controller4:8100
+      HMAC_SECRETS: '{"controller1":"controller1-secret-change-me","controller2":"controller2-secret-change-me","controller3":"controller3-secret-change-me","controller4":"controller4-secret-change-me"}'
+    depends_on: [mqtt, controller1, controller2, controller3, controller4]
+  sensor:
+    build: .
+    profiles: ["tools"]
+    command: python -m simulators.sensor
+    environment: {MQTT_HOST: mqtt}
+    depends_on: [mqtt]
+  actuator:
+    build: .
+    profiles: ["tools"]
+    command: python -m simulators.actuator
+    environment: {MQTT_HOST: mqtt}
+    depends_on: [mqtt]
+volumes:
+  controller1_data:
+  controller2_data:
+  controller3_data:
+  controller4_data:
